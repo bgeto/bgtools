@@ -1,0 +1,7 @@
+name = "Bg Tools"
+description = "Provide code functionality for devs"
+core = "7.x"
+package = "Other"
+project = "bgtools"
+
+scripts[] = assets/js/functions.js

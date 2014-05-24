@@ -1,0 +1,214 @@
+<?php
+
+/**
+ * @function p
+ *
+ * Shortcut for a print_r.
+ */
+function p() {
+  if (variable_get('isea_dev_panic', FALSE)) {
+    try {
+      throw new Exception();
+    } catch (Exception $e) {
+      echo '<pre>';
+      print_r($e);
+      die;
+    }
+  }
+  foreach (func_get_args() as $arg) $output[] = print_r($arg, 1);
+  echo "<pre>\n" . implode("\n", $output) . "</pre>";
+}
+
+/**
+ * Check if we are in the front theme or not
+ */
+function check_if_front_theme () {
+  global $theme;
+
+  $admin_theme = variable_get('admin_theme');
+  $theme_default = variable_get('theme_default');
+
+  if($theme == $theme_default) { return true; }
+  else { return false; }
+}
+
+/**
+ * Provide a pager
+ */
+function pager_array_splice($data, $limit = 9, $element = 0) {
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : '';
+  // Convert comma-separated $page to an array, used by other functions.
+  $pager_page_array = explode(',', $page);
+  // We calculate the total of pages as ceil(items / limit).
+  $pager_total_items[$element] = count($data);
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
+  return array_slice($data, $pager_page_array[$element] * $limit, $limit, TRUE);
+}
+
+/**
+ * Takes two dates timestamp and creates an 
+ * inclusive array of the dates between the from and to dates.
+ */
+function range_array_date($iDateFrom,$iDateTo) {
+
+  $aryRange=array();
+
+  if ($iDateTo>=$iDateFrom) {
+    array_push($aryRange, $iDateFrom); // first entry
+    while ($iDateFrom<$iDateTo) {
+      $iDateFrom+=86400; // add 24 hours
+      array_push($aryRange,$iDateFrom);
+    }
+  }
+  return $aryRange;
+}
+
+/**
+ * Helper function to add blocks in a less verbose way.
+ * @see hook_block_list_alter
+ * @param $items array
+ *        List of blocks
+ *
+ * @return a list of (object) blocks available for hook_block_list_alter().
+ */
+function bgtools_block_factory($items, $block_config = NULL) {
+  $default_block_config = array(
+    'region' => 'content',
+    'title'  => '',
+    'cache'  => -1,
+    'theme'  => variable_get('theme_default', 'bartik'),
+  );
+
+  if ($block_config){
+    $default_block_config = array_merge($default_block_config, $block_config);
+  }
+
+  $blocks = array();
+  foreach($items as $item) {
+    $blocks[] = (object)(array_merge($default_block_config, $item));
+  }
+  return $blocks;
+}
+
+/**
+ * Helper function to get a list of renderable blocks
+ * @see bgtools_block_factory
+ * @param $items array, List of block
+ */
+function bgtools_block_renderable($items, $block_config = NULL) {
+  $blocks = isea_core_block_factory($items, $block_config);
+  $blocks = _block_render_blocks($blocks);
+  $blocks = _block_get_renderable_array($blocks);
+  return $blocks;
+}
+
+function get_menu_data($menu_name, $depth) {
+  $data = array();
+
+  $menu = menu_tree_all_data($menu_name);
+  $menu_localize = i18n_menu_localize_tree($menu);
+
+  if(!empty($menu_localize)) {
+    foreach ($menu_localize as $key => $menu_parent) {
+
+      if($menu_parent['link']['hidden'] == 0) {
+        if(isset($menu_parent['link']['options']['fragment'])) {
+          $fragment = $menu_parent['link']['options']['fragment'];
+        }
+        else { $fragment='';}
+        if(!empty($menu_parent['link']['router_path'])) {
+          $menu1_url = url($menu_parent['link']['link_path'], array('fragment' => $fragment, 'absolute' => TRUE)); 
+        }
+        else { $menu1_url = $menu_parent['link']['link_path']; }
+
+        $items = array();
+        if(isset($menu_parent['below']) && !empty($menu_parent['below'])) {
+
+          foreach ($menu_parent['below'] as $key => $menu_child) {
+
+            if($menu_child['link']['hidden'] == 0) {
+              if(isset($menu_child['link']['options']['fragment'])) {
+                $fragment = $menu_child['link']['options']['fragment'];
+              }
+              else { $fragment='';}
+          
+              if(!empty($menu_child['link']['router_path'])) { 
+                $menu2_url = url($menu_child['link']['link_path'], array('fragment' => $fragment, 'absolute' => TRUE)); 
+              }
+              else { $menu2_url = $menu_child['link']['link_path']; }
+              $items[] = array(
+                'title' => $menu_child['link']['link_title'],
+                'url' => $menu2_url
+              );
+            }
+          }
+        }
+        $data[] = array(
+          'title' => $menu_parent['link']['link_title'],
+          'url' => $menu1_url,
+          'items' => $items
+        );
+      }
+    }
+  }
+
+  return $data;
+}
+
+/**
+ * Return date format in french
+ */
+function date_french($format, $timestamp = null) {
+  $param_D = array('', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim');
+  $param_l = array('', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche');
+  $param_F = array('', 'Janvier', 'F&eacute;vrier', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Ao&ucirc;t', 'Septembre', 'Octobre', 'Novembre', 'D&eacute;cembre');
+  $param_M = array('', 'Jan', 'F&eacute;v', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Ao&ucirc;', 'Sep', 'Oct', 'Nov', 'D&eacute;c');
+
+  $return = '';
+  if(is_null($timestamp)) { $timestamp = mktime(); }
+  for($i = 0, $len = strlen($format); $i < $len; $i++) {
+    switch($format[$i]) {
+      case '\\' : // double.slashes
+        $i++;
+        $return .= isset($format[$i]) ? $format[$i] : '';
+        break;
+      case 'D' :
+        $return .= $param_D[date('N', $timestamp)];
+        break;
+      case 'l' :
+        $return .= $param_l[date('N', $timestamp)];
+        break;
+      case 'F' :
+        $return .= $param_F[date('n', $timestamp)];
+        break;
+      case 'M' :
+        $return .= $param_M[date('n', $timestamp)];
+        break;
+      default :
+        $return .= date($format[$i], $timestamp);
+        break;
+    }
+  }
+  return $return;
+}
+
+function convert_filesize($bytes) {
+  if ($bytes >= 1024*1024*1024) {
+    // Go
+    return round(($bytes / 1024)/1024/1024, 2) ." Go";
+  }
+  elseif ($bytes >= 1024*1024) {
+    // Mo
+    return round(($bytes / 1024)/1024, 2) ." Mo";
+  }
+  elseif ($bytes >= 1024) {
+    // ko
+    return round(($bytes / 1024), 2) ." ko";
+  }
+  else {
+    // octets
+    return $bytes ." octets";
+  }
+}
