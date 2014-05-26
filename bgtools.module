@@ -214,8 +214,8 @@ function convert_filesize($bytes) {
 }
 
 /*
-- * Return embed image with the good transmitted preset
--*/
+ * Return embed image with teh good transmitted preset
+*/
 function get_data_to_image($image_data, $preset) {
   $image = '';
   if(!empty($image_data)) {
@@ -229,11 +229,11 @@ function get_data_to_image($image_data, $preset) {
         )
       );
     }
-    else {    
+    else {
       $image = theme(
         'image',
         array(
-         'path'  => file_create_url($image_data['uri']),
+          'path'  => file_create_url($image_data['uri']),
           'alt'   => $image_data['alt'],
           'title' => $image_data['title']
         )
@@ -244,8 +244,8 @@ function get_data_to_image($image_data, $preset) {
 }
 
 /*
-- * Return directly the image
--*/
+ * Return directly the image
+*/
 function get_node_image($node, $preset) {
   $image = '';
   $image_data = get_image_data($node);
