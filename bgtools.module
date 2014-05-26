@@ -212,3 +212,45 @@ function convert_filesize($bytes) {
     return $bytes ." octets";
   }
 }
+
+/*
+- * Return embed image with the good transmitted preset
+-*/
+function get_data_to_image($image_data, $preset) {
+  $image = '';
+  if(!empty($image_data)) {
+    if(isset($preset) && !empty($preset)) {
+      $image = theme('image_style',
+        array(
+          'style_name' => $preset,
+          'path' => $image_data['uri'],
+          'alt'   => $image_data['alt'],
+          'title' => $image_data['title']
+        )
+      );
+    }
+    else {    
+      $image = theme(
+        'image',
+        array(
+         'path'  => file_create_url($image_data['uri']),
+          'alt'   => $image_data['alt'],
+          'title' => $image_data['title']
+        )
+      );
+    }
+  }
+  return $image;
+}
+
+/*
+- * Return directly the image
+-*/
+function get_node_image($node, $preset) {
+  $image = '';
+  $image_data = get_image_data($node);
+  if(!empty($image_data)) {
+    $image = get_data_to_image($image_data, $preset);
+  }
+  return $image;
+}
