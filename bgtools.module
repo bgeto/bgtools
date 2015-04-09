@@ -1,5 +1,10 @@
 <?php
 
+include 'assets/scripts/chromephp/ChromePhp.php';
+//ChromePhp::log('Hello console!');
+//ChromePhp::log($_SERVER);
+//ChromePhp::warn('something went wrong!');
+
 /**
  * @function p
  *
@@ -222,7 +227,7 @@ function convert_filesize($bytes) {
 */
 function get_data_to_image($image_data, $preset) {
   $image = '';
-  if(!empty($image_data)) {
+  if(!empty($image_data) && file_exists($image_data['uri'])) {
     if(isset($preset) && !empty($preset)) {
       $image = theme('image_style',
         array(
@@ -263,15 +268,164 @@ function get_node_image($node, $preset) {
  * Return array long/lat by address
 */
 function getLongLatByAddress($address) {
+  
+  $longLat = array(
+    'long' => '',
+    'lat'  => '',
+  );
 
   $url = "http://maps.google.com/maps/api/geocode/json?address=".$address;
-  $response = file_get_contents($url);
-  $response = json_decode($response, true);
 
-  $longLat = array(
-    'long' => $response['results'][0]['geometry']['location']['lng'],
-    'lat'  => $response['results'][0]['geometry']['location']['lat'],
-  );
-  
+  try{
+    $response = file_get_contents($url);
+    $response = json_decode($response, true);
+    if(!empty($response) && $response['status'] == 'OK') {
+      
+      $longLat = array(
+        'long' => $response['results'][0]['geometry']['location']['lng'],
+        'lat'  => $response['results'][0]['geometry']['location']['lat'],
+      );
+    }
+  }catch(Exception $ex){
+    //Process the exception
+  }
+
   return $longLat;
+}
+
+function bgtools_apachesolr_query_alter($query) {
+  if(isset($_GET['bgsolr'])) {
+    $bgsolr = $_GET['bgsolr'];
+    $bgsolrExplode = explode(':', $bgsolr);
+    if(!empty($bgsolrExplode[1])) {
+      $queryLine = '';
+      $bgsolrExplodeDecode = urldecode($bgsolrExplode[1]);
+      $bgsolrExplodeDecode = trim($bgsolrExplodeDecode);
+      $bgsolrExplodeDecode = str_replace('(', '', $bgsolrExplodeDecode);
+      $bgsolrExplodeDecode = str_replace(')', '', $bgsolrExplodeDecode);
+      //$bgsolrExplodeDecode = str_replace(' ', '', $bgsolrExplodeDecode);
+      $bgsolrExplode2 = explode('OR', $bgsolrExplodeDecode);
+      foreach ($bgsolrExplode2 as $key => $svalue) {
+        if($key == 0) {
+          //$queryLine .= $bgsolrExplode[0].':*'.$svalue .'*';
+          //$queryLine .= ' OR '.$bgsolrExplode[0].':"'.$svalue .'"';
+          $queryLine .= $bgsolrExplode[0].':"'.$svalue .'"';
+        }
+        else {
+          //$queryLine .= ' OR '.$bgsolrExplode[0].':*'.$svalue .'*';
+          $queryLine .= ' OR '.$bgsolrExplode[0].':"'.$svalue .'"';
+        }
+      }
+
+      $query->addParam(
+        'q',
+        '('.$queryLine.')'
+      );
+    }
+  }
+}
+
+function bgtools_mail_send($infos) {
+  $module = $infos['module'];
+  $key = $infos['key'];
+  $to = $infos['to'];
+  $from = $infos['from'];
+  $language = isset($infos['lang']) ? $infos['lang'] : language_default();
+  $params = array(
+    'subject' => $infos['subject'],
+    'body' => $infos['body'],
+  );
+  if(array_key_exists('headers', $infos)) {
+    $params['headers'] = $infos['headers']; //Assumed as an array
+  }
+
+  $errorName = $module.'-email';
+  $send = TRUE;
+  $mail = drupal_mail($module, $key, $to, $language, $params, $from, $send);
+  if($mail['result']) { return TRUE; } else {
+    $error_msg = 'Failed to send the email '.$module.' Module';
+    watchdog($errorName, $error_msg, array(), WATCHDOG_ALERT);
+    return FALSE;
+  }
+}
+
+/**
+ * Send debug code to the Javascript console
+ */ 
+function debug_to_console($data) {
+  if(is_array($data) || is_object($data)) {
+    echo("<script>console.log('PHP: ".json_encode($data)."');</script>");
+  } else {
+    echo("<script>console.log('PHP: ".$data."');</script>");
+  }
+}
+
+function bgremove_accents($str, $charset='utf-8') {
+    $str = htmlentities($str, ENT_NOQUOTES, $charset);
+    
+    $str = preg_replace('#&([A-za-z])(?:acute|cedil|caron|circ|grave|orn|ring|slash|th|tilde|uml);#', '\1', $str);
+    $str = preg_replace('#&([A-za-z]{2})(?:lig);#', '\1', $str); // pour les ligatures e.g. '&oelig;'
+    $str = preg_replace('#&[^;]+;#', '', $str); // supprime les autres caractères
+    
+    return $str;
+}
+
+function block_render($module, $block_id) {
+  $block = block_load($module, $block_id);
+  $block_content = _block_render_blocks(array($block));
+  $build = _block_get_renderable_array($block_content);
+  $block_rendered = drupal_render($build);
+  return $block_rendered;
+}
+
+/* gets the data from a URL */
+function get_data($url) {
+  $ch = curl_init();
+  $timeout = 5;
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+  curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout);
+  $data = curl_exec($ch);
+  curl_close($ch);
+  return $data;
+}
+
+function bgtools_add_role_to_user($user, $role_name) {
+  // For convenience, we'll allow user ids as well as full user objects.
+  if (is_numeric($user)) {
+    $user = user_load($user);
+  }
+  // If the user doesn't already have the role, add the role to that user.
+  $key = array_search($role_name, $user->roles);
+  if ($key == FALSE) {
+    // Get the rid from the roles table.
+    $roles = user_roles(TRUE);
+    $rid = array_search($role_name, $roles);
+    if ($rid != FALSE) {
+      $new_role[$rid] = $role_name;
+      $all_roles = $user->roles + $new_role; // Add new role to existing roles.
+      user_save($user, array('roles' => $all_roles));
+    }
+  }
+}
+function bgtools_add_role_to_user2($user, $role_name) {
+  // For convenience, we'll allow user ids as well as full user objects.
+  if (is_numeric($user)) {
+    $user = user_load($user);
+  }
+  // If the user doesn't already have the role, add the role to that user.
+  $key = array_search($role_name, $user->roles);
+  if ($key == FALSE) {
+    // Get the rid from the roles table.
+    $roles = user_roles(TRUE);
+    $rid = array_search($role_name, $roles);
+    if ($rid != FALSE) {
+      db_insert('users_roles')
+      ->fields(array(
+        'uid' => $user->uid,
+        'rid' => $rid,
+      ))
+      ->execute();
+    }
+  }
 }
